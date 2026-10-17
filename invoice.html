@@ -1673,10 +1673,7 @@
   }
   function applyUnitSuggest(el, sug){
     const tr = el.closest('tr');
-    const name = tr.cells[4].textContent.trim();
     el.textContent = sug.label;
-    const p = findUnitPrice(name, sug.label);
-    if(p !== null) tr.cells[1].textContent = (p == null ? '' : p);
     recalcAll();
   }
   function showUnitSuggest(el, q){
@@ -1741,19 +1738,9 @@
   document.addEventListener('focusin', e => {
     if(!isSuggestField(e.target) && !e.target.closest('.suggest')) hideSuggest();
   });
-  function fillPriceIfEmpty(tr){
-    const name = tr.cells[4].textContent.trim();
-    const unit = tr.cells[3].textContent.trim();
-    if(!name || !unit) return;
-    if(tr.cells[1].textContent.trim() !== '') return;
-    const p = findUnitPrice(name, unit);
-    if(p !== null && p !== ''){ tr.cells[1].textContent = p; recalcAll(); }
-  }
   document.addEventListener('focusout', e => {
     const el = e.target;
-    if(el.matches && el.matches('.items-body td.col-name, .items-body td.col-unit')){
-      fillPriceIfEmpty(el.closest('tr'));
-    } else if(el.id === 'customer'){
+    if(el.id === 'customer'){
       addCustomer(el.value);
     }
   });
