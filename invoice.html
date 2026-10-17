@@ -1699,7 +1699,6 @@
         const tr = el.closest('tr');
         tr.cells[4].textContent = sug.label;
         recalcAll();
-        fillPriceIfEmpty(tr);
       });
 
     } else if(el.matches('.items-body td.col-unit')){
@@ -1742,32 +1741,18 @@
   document.addEventListener('focusin', e => {
     if(!isSuggestField(e.target) && !e.target.closest('.suggest')) hideSuggest();
   });
-  function fillPriceIfEmpty(tr, force){
-    if(!tr) return;
+  function fillPriceIfEmpty(tr){
     const name = tr.cells[4].textContent.trim();
-    if(!name) return;
-    const item = loadItems().find(x => x.name === name);
-    if(!item) return;
-    const units = (item.units || []).filter(u => (u.unit || '') !== '' || (u.price || '') !== '');
-    if(!units.length) return;
-    if(!tr.cells[3].textContent.trim() && units.length === 1 && units[0].unit){
-      tr.cells[3].textContent = units[0].unit;
-    }
-    if(!force && tr.cells[1].textContent.trim() !== '') return;
     const unit = tr.cells[3].textContent.trim();
-    let u = unit ? units.find(x => x.unit === unit) : null;
-    if(!u) u = units.find(x => String(x.price === null || x.price === undefined ? '' : x.price) !== '') || units[0];
-    if(u && u.price !== null && u.price !== undefined && String(u.price) !== ''){
-      tr.cells[1].textContent = u.price;
-      recalcAll();
-    }
+    if(!name || !unit) return;
+    if(tr.cells[1].textContent.trim() !== '') return;
+    const p = findUnitPrice(name, unit);
+    if(p !== null && p !== ''){ tr.cells[1].textContent = p; recalcAll(); }
   }
   document.addEventListener('focusout', e => {
     const el = e.target;
-    if(el.matches && el.matches('.items-body td.col-name')){
+    if(el.matches && el.matches('.items-body td.col-name, .items-body td.col-unit')){
       fillPriceIfEmpty(el.closest('tr'));
-    } else if(el.matches && el.matches('.items-body td.col-unit')){
-      fillPriceIfEmpty(el.closest('tr'), true);
     } else if(el.id === 'customer'){
       addCustomer(el.value);
     }
@@ -1880,12 +1865,7 @@
   });
 
   document.addEventListener('input', e => {
-    if(e.target.closest('.items-body')){
-      recalcAll();
-      if(e.target.matches && e.target.matches('.items-body td.col-name, .items-body td.col-unit')){
-        fillPriceIfEmpty(e.target.closest('tr'));
-      }
-    }
+    if(e.target.closest('.items-body')) recalcAll();
     if(e.target.id === 'invNo' || e.target.id === 'date' || e.target.id === 'customer'){
       syncPageHeaders();
     }
