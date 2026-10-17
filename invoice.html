@@ -1164,7 +1164,7 @@
     const units = [...document.querySelectorAll('#unitRows .unit-row')].map(r => ({
       unit: r.querySelector('.uUnit').value.trim(),
       price: r.querySelector('.uPrice').value.trim()
-    })).filter(u => u.unit && u.price);
+    })).filter(u => u.unit);
     const rec = { name:name, units:units };
     if(editingName !== null && editingName !== name) rowDelete('items', 'name', editingName);
     const list = loadItems().filter(it => it.name !== name && it.name !== editingName);
