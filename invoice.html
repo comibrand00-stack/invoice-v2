@@ -473,7 +473,7 @@
     </div>
     <div class="modal-body">
       <div class="item-form">
-        <input type="text" id="fName" placeholder="اسم الصنف" onkeydown="if(event.key==='Enter')submitItemForm()">
+        <input type="text" id="fName" placeholder="اسم الصنف" onkeydown="itemFormNext(this,event)">
         <button class="btn" id="saveBtn" onclick="submitItemForm()">إضافة</button>
         <button class="btn gray" id="cancelBtn" onclick="cancelEdit()" style="display:none">إلغاء</button>
       </div>
@@ -1120,13 +1120,40 @@
     ).join('');
     document.getElementById('itemsEmpty').style.display = modalList.length ? 'none' : 'block';
   }
+  function itemFormNext(el, e){
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    if(el.id === 'fName'){
+      let first = document.querySelector('#unitRows .unit-row .uUnit');
+      if(!first){ addUnitRow(); first = document.querySelector('#unitRows .unit-row .uUnit'); }
+      if(first) first.focus();
+      return;
+    }
+    if(el.classList.contains('uUnit')){
+      const row = el.closest('.unit-row');
+      const price = row && row.querySelector('.uPrice');
+      if(price) price.focus();
+      return;
+    }
+    if(el.classList.contains('uPrice')){
+      const row = el.closest('.unit-row');
+      const rows = [...document.querySelectorAll('#unitRows .unit-row')];
+      const idx = rows.indexOf(row);
+      if(idx > -1 && idx < rows.length - 1){
+        const nxt = rows[idx + 1].querySelector('.uUnit');
+        if(nxt) nxt.focus();
+      } else {
+        submitItemForm();
+      }
+    }
+  }
   function addUnitRow(unit, price){
     const c = document.getElementById('unitRows');
     const div = document.createElement('div');
     div.className = 'unit-row';
     div.innerHTML =
-      '<input type="text" class="uUnit" placeholder="الوحدة" value="' + esc(unit || '') + '" onkeydown="if(event.key===\'Enter\')submitItemForm()">' +
-      '<input type="text" class="uPrice num" placeholder="السعر" value="' + esc(price == null ? '' : String(price)) + '" onkeydown="if(event.key===\'Enter\')submitItemForm()">' +
+      '<input type="text" class="uUnit" placeholder="الوحدة" value="' + esc(unit || '') + '" onkeydown="itemFormNext(this,event)">' +
+      '<input type="text" class="uPrice num" placeholder="السعر" value="' + esc(price == null ? '' : String(price)) + '" onkeydown="itemFormNext(this,event)">' +
       '<button class="btn icon red" type="button" title="حذف الوحدة">' + ICON.del + '</button>';
     div.querySelector('button').addEventListener('click', () => div.remove());
     c.appendChild(div);
@@ -1151,6 +1178,7 @@
     }
     cancelEdit();
     renderItems();
+    document.getElementById('fName').focus();
   }
   function editItem(name){
     const it = loadItems().find(x => x.name === name);
