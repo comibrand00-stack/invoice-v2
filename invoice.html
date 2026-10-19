@@ -1678,8 +1678,7 @@
     ).join('');
     sugEl.style.display = 'block';
     positionSuggest(el);
-    const first = sugEl.querySelector('.opt');
-    if(first) first.classList.add('active');
+    [...sugEl.querySelectorAll('.opt')].forEach(o => o.classList.remove('active'));
   }
   function isSuggestField(el){
     return el && el.matches && (
