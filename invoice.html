@@ -1786,7 +1786,23 @@
     } else if(e.key === 'Enter'){
       e.preventDefault();
       e.stopImmediatePropagation();
-      if(idx < 0 && opts.length) idx = 0;
+      if(idx < 0){
+        hideSuggest();
+        const next = enterSequenceNext(sugTarget);
+        if(next && isEditableCell(next)){
+          next.focus();
+          placeCaretEnd(next);
+        } else {
+          const grid = document.querySelector('.items-table');
+          const tr = sugTarget && sugTarget.closest('tr');
+          if(tr){
+            const rows = [...tr.parentElement.rows];
+            const r = rows.indexOf(tr) + 1;
+            if(r < rows.length) rows[r].cells[ENTER_SEQ[0]].focus();
+          }
+        }
+        return;
+      }
       if(idx >= 0) commitSuggestion(idx);
       return;
     } else if(e.key === 'Escape'){
