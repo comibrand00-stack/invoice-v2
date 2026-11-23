@@ -82,7 +82,7 @@
     width:210mm;
     min-height:297mm;
     margin:16px auto;
-    padding:10mm 8mm;
+    padding:8mm 8mm;
     background:#fff;
     box-shadow:0 0 8px rgba(0,0,0,.3);
   }
@@ -107,15 +107,15 @@
     border:1px solid #333;
     border-radius:6px;
     overflow:hidden;
-    margin-bottom:10px;
+    margin-bottom:8px;
     background:#fff;
   }
   .doc-head .cell{
     display:flex;
     align-items:center;
     gap:8px;
-    padding:8px 12px;
-    min-height:42px;
+    padding:6px 10px;
+    min-height:38px;
     font-size:15px;
     border-left:1px solid #333;
   }
@@ -149,8 +149,8 @@
   }
   th,td{
     border:1px solid var(--line);
-    padding:4px 5px;
-    height:26px;
+    padding:3px 5px;
+    height:25px;
     text-align:center;
     vertical-align:middle;
     overflow:hidden;
@@ -162,7 +162,7 @@
   td[contenteditable]{ cursor:text; }
   td[contenteditable]:focus{ outline:2px solid #0d6efd; outline-offset:-2px; }
   tbody td.col-name, tbody td.col-unit, tbody td.col-qty, tbody td.col-price, tbody td.col-value{ font-size:17px; }
-  .items-body td{ height:28px; padding:2px 5px; }
+  .items-body td{ height:27px; padding:1px 5px; }
   .col-m{ width:5%; }
   .col-name{ width:42%; text-align:right; }
   th.col-name{ text-align:center; }
@@ -178,7 +178,7 @@
   .num{ direction:ltr; }
 
   tfoot td{
-    height:30px;
+    height:28px;
     font-weight:bold;
     background:#fafafa;
   }
@@ -422,7 +422,7 @@
     </svg>
     <h1>برنامج الفاتورة</h1>
     <p>سجّل الدخول للمتابعة</p>
-    <div class="ver">الإصدار: <span id="ver">x20261124h</span></div>
+    <div class="ver">الإصدار: <span id="ver">x20261124i</span></div>
     <select id="projSel" onchange="onProjChange()"></select>
     <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     <input type="password" id="loginPass" placeholder="كلمة المرور" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -639,7 +639,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const ROWS = 33;
+  const ROWS = 34;
   const ITEMS_KEY = 'invoice_items_v1';
   const HISTORY_KEY = 'invoice_history_v1';
   const CUSTOMERS_KEY = 'invoice_customers_v1';
