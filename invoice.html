@@ -366,7 +366,7 @@
   @page{ size:A4; margin:0.15in 0.15in 0.15in 0.15in; }
   @media print{
     html,body{ background:#fff; }
-    .toolbar,.modal,.suggest,.page-del,.fab,.offline-bar{ display:none !important; }
+    .toolbar,.modal,.suggest,.page-del,.fab{ display:none !important; }
     body.printing #pages{ display:none !important; }
     body.printing #printArea{ display:block !important; }
     .sheet{
@@ -395,9 +395,6 @@
   .login-err{ color:#d00; font-size:13px; margin-top:10px; min-height:18px; }
   .login-box .ver{ font-size:12px; color:#9aa1ad; margin-top:10px; }
   .login-box .hint{ font-size:12px; color:#888; margin:8px 0 0; line-height:1.6; }
-  .offline-bar{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:9998; display:flex; gap:10px; align-items:center; background:#2b2b2b; color:#fff; padding:8px 14px; border-radius:22px; font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.25); }
-  .offline-bar[hidden]{ display:none; }
-  .offline-bar button{ background:#0d6efd; color:#fff; border:0; border-radius:16px; padding:4px 12px; font-size:12px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -423,7 +420,7 @@
     </svg>
     <h1>برنامج الفاتورة</h1>
     <p>سجّل الدخول للمتابعة</p>
-    <div class="ver">الإصدار: <span id="ver">x20261123c</span></div>
+    <div class="ver">الإصدار: <span id="ver">x20261123d</span></div>
     <select id="projSel" onchange="onProjChange()"></select>
     <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     <input type="password" id="loginPass" placeholder="كلمة المرور" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -432,11 +429,6 @@
     <div class="hint">تُحفظ البيانات على هذا الجهاز فقط، ويمكن مزامنتها لاحقاً عند تسجيل الدخول.</div>
     <div class="login-err" id="loginErr"></div>
   </div>
-</div>
-
-<div class="offline-bar" id="offlineBar" hidden>
-  <span id="offlineText">وضع بدون اتصال — البيانات تُحفظ محلياً</span>
-  <button type="button" onclick="openLogin()">دخول / مزامنة</button>
 </div>
 
 <div class="toolbar">
@@ -847,10 +839,6 @@
     }
   }
 
-  function updateOfflineBar(){
-    const bar = document.getElementById('offlineBar');
-    if(bar) bar.hidden = !OFFLINE_MODE;
-  }
   function openLogin(){
     fillProjSel();
     document.getElementById('loginScreen').classList.add('open');
@@ -866,7 +854,6 @@
     localStorage.setItem(OFFLINE_LS, '1');
     document.getElementById('loginScreen').classList.remove('open');
     startApp(true);
-    updateOfflineBar();
   }
 
   const ICON = {
@@ -1117,9 +1104,11 @@
   }
   function clearItems(){
     if(!confirm('حذف جميع الأصناف المحفوظة؟')) return;
+    const list = loadItems().slice();
     itemsCache = [];
     writeLS(ITEMS_KEY, []);
-    if(SB_READY) sb.from('items').delete().neq('name','').then(({ error }) => { if(error) console.error('items clear:', error.message); });
+    if(OFFLINE_MODE) list.forEach(it => rowDelete('items', 'name', it.name));
+    else if(SB_READY) sb.from('items').delete().neq('name','').then(({ error }) => { if(error) console.error('items clear:', error.message); });
     renderItems();
   }
 
@@ -2014,7 +2003,12 @@
     syncPageHeaders();
     renumberAll();
     recalcAll();
-    updateOfflineBar();
+    const lo = document.querySelector('[onclick="doLogout()"]');
+    if(lo){
+      const label = OFFLINE_MODE ? 'دخول / مزامنة' : 'خروج';
+      lo.title = label;
+      lo.setAttribute('aria-label', label);
+    }
   }
   async function doLogin(){
     const email = document.getElementById('loginEmail').value.trim();
@@ -2051,10 +2045,6 @@
     const t = setTimeout(() => ctl.abort(), 8000);
     try{
       await fetch(p.url + '/auth/v1/health', { mode:'no-cors', cache:'no-store', signal:ctl.signal });
-      if(OFFLINE_MODE){
-        const t = document.getElementById('offlineText');
-        if(t) t.textContent = 'الخادم متاح الآن — سجّل الدخول للمزامنة';
-      }
     }catch(e){
       if(!err.textContent) err.textContent = 'تعذّر الاتصال بالخادم — تحقّق من اتصال الإنترنت';
     }finally{
@@ -2062,18 +2052,14 @@
     }
   }
   async function doLogout(){
-    try{ if(SB_READY && !OFFLINE_MODE) await sb.auth.signOut(); }catch(e){}
-    OFFLINE_MODE = false;
-    localStorage.removeItem(OFFLINE_LS);
+    if(OFFLINE_MODE){ openLogin(); return; }
+    try{ if(SB_READY) await sb.auth.signOut(); }catch(e){}
     location.reload();
   }
   (async function(){
     fillProjSel();
     if(OFFLINE_MODE){
       startApp(true);
-      updateOfflineBar();
-      checkServerReachable();
-      setInterval(checkServerReachable, 30000);
       return;
     }
     if(!SB_READY){ startApp(); return; }
