@@ -366,7 +366,7 @@
   @page{ size:A4; margin:0.15in 0.15in 0.15in 0.15in; }
   @media print{
     html,body{ background:#fff; }
-    .toolbar,.modal,.suggest,.page-del,.fab{ display:none !important; }
+    .toolbar,.modal,.suggest,.page-del,.fab,.offline-bar{ display:none !important; }
     body.printing #pages{ display:none !important; }
     body.printing #printArea{ display:block !important; }
     .sheet{
@@ -394,6 +394,10 @@
   .login-box .btn{ width:100%; height:42px; }
   .login-err{ color:#d00; font-size:13px; margin-top:10px; min-height:18px; }
   .login-box .ver{ font-size:12px; color:#9aa1ad; margin-top:10px; }
+  .login-box .hint{ font-size:12px; color:#888; margin:8px 0 0; line-height:1.6; }
+  .offline-bar{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:9998; display:flex; gap:10px; align-items:center; background:#2b2b2b; color:#fff; padding:8px 14px; border-radius:22px; font-size:12px; box-shadow:0 4px 14px rgba(0,0,0,.25); }
+  .offline-bar[hidden]{ display:none; }
+  .offline-bar button{ background:#0d6efd; color:#fff; border:0; border-radius:16px; padding:4px 12px; font-size:12px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -419,13 +423,20 @@
     </svg>
     <h1>برنامج الفاتورة</h1>
     <p>سجّل الدخول للمتابعة</p>
-    <div class="ver">الإصدار: <span id="ver">x20261012b8</span></div>
+    <div class="ver">الإصدار: <span id="ver">x20261123c</span></div>
     <select id="projSel" onchange="onProjChange()"></select>
     <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     <input type="password" id="loginPass" placeholder="كلمة المرور" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn" id="loginBtn" onclick="doLogin()">دخول</button>
+    <button class="btn gray" id="offlineBtn" onclick="enterOfflineMode()" style="margin-top:6px">متابعة بدون اتصال</button>
+    <div class="hint">تُحفظ البيانات على هذا الجهاز فقط، ويمكن مزامنتها لاحقاً عند تسجيل الدخول.</div>
     <div class="login-err" id="loginErr"></div>
   </div>
+</div>
+
+<div class="offline-bar" id="offlineBar" hidden>
+  <span id="offlineText">وضع بدون اتصال — البيانات تُحفظ محلياً</span>
+  <button type="button" onclick="openLogin()">دخول / مزامنة</button>
 </div>
 
 <div class="toolbar">
@@ -648,6 +659,9 @@
   ];
   const SB_TABLE = 'invoice_store'; // legacy KV (migration only)
   const PROJ_LS = 'invoice_proj_v1';
+  const OFFLINE_LS = 'invoice_offline_v1';
+  const PENDING_LS = 'invoice_pending_sync_v1';
+  let OFFLINE_MODE = localStorage.getItem(OFFLINE_LS) === '1';
   let sb = null, SB_READY = false, SB_URL = '', SB_KEY = '';
   function currentProj(){
     const id = localStorage.getItem(PROJ_LS);
@@ -684,6 +698,19 @@
   }
   function writeLS(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
 
+  // pending write queue used while working without internet
+  function loadPending(){
+    const v = readLS(PENDING_LS, []);
+    return Array.isArray(v) ? v : [];
+  }
+  function savePending(ops){ writeLS(PENDING_LS, ops); }
+  function queueOp(op){
+    const ops = loadPending();
+    const k = JSON.stringify(op);
+    if(!ops.some(x => JSON.stringify(x) === k)) ops.push(op);
+    savePending(ops);
+  }
+
   function sbError(msg){
     console.error(msg);
     let el = document.getElementById('sbErr');
@@ -699,10 +726,12 @@
   }
   // Per-row writes => concurrent devices never overwrite each other's data.
   function rowUpsert(table, row){
+    if(OFFLINE_MODE){ queueOp({ t:'upsert', table:table, row:row }); return; }
     if(!SB_READY) return;
     sb.from(table).upsert(row).then(({ error }) => { if(error) sbError(table + ' ← ' + error.message); });
   }
   function rowDelete(table, col, val){
+    if(OFFLINE_MODE){ queueOp({ t:'delete', table:table, where:[[col, val]] }); return; }
     if(!SB_READY) return;
     sb.from(table).delete().eq(col, val).then(({ error }) => { if(error) sbError(table + ' ← ' + error.message); });
   }
@@ -792,6 +821,52 @@
       customersCache = readLS(CUSTOMERS_KEY, []);
       historyCache   = readLS(HISTORY_KEY, []);
     }
+  }
+
+  // replay local changes to Supabase after a successful login
+  async function syncPending(){
+    if(!SB_READY) return;
+    const ops = loadPending();
+    for(let i=0; i<ops.length; i++){
+      const op = ops[i];
+      try{
+        if(op.t === 'upsert'){
+          const { error } = await sb.from(op.table).upsert(op.row);
+          if(error) throw error;
+        } else {
+          let q = sb.from(op.table).delete();
+          (op.where || []).forEach(w => { q = q.eq(w[0], w[1]); });
+          const { error } = await q;
+          if(error) throw error;
+        }
+        savePending(ops.slice(i+1));
+      }catch(e){
+        sbError('مزامنة ← ' + (e.message || e));
+        break;
+      }
+    }
+  }
+
+  function updateOfflineBar(){
+    const bar = document.getElementById('offlineBar');
+    if(bar) bar.hidden = !OFFLINE_MODE;
+  }
+  function openLogin(){
+    fillProjSel();
+    document.getElementById('loginScreen').classList.add('open');
+    setTimeout(() => { const el = document.getElementById('loginEmail'); if(el) el.focus(); }, 100);
+  }
+  function enterOfflineMode(){
+    const ops = loadPending().filter(o => o.t === 'delete');
+    (readLS(ITEMS_KEY, []) || []).forEach(x => ops.push({ t:'upsert', table:'items', row:{ name:x.name, units:x.units || [] } }));
+    (readLS(CUSTOMERS_KEY, []) || []).forEach(n => ops.push({ t:'upsert', table:'customers', row:{ name:n } }));
+    (readLS(HISTORY_KEY, []) || []).forEach(v => ops.push({ t:'upsert', table:'invoices', row:invoiceRow(v) }));
+    savePending(ops);
+    OFFLINE_MODE = true;
+    localStorage.setItem(OFFLINE_LS, '1');
+    document.getElementById('loginScreen').classList.remove('open');
+    startApp(true);
+    updateOfflineBar();
   }
 
   const ICON = {
@@ -1917,18 +1992,18 @@
   });
   window.addEventListener('beforeunload', saveDraft);
 
-  let appStarted = false;
-  async function startApp(){
-    if(appStarted) return;
+  let appStarted = false, autoRefreshStarted = false;
+  async function startApp(force){
+    if(appStarted && !force) return;
     appStarted = true;
     document.getElementById('loginScreen').classList.remove('open');
-    if(SB_READY){
-      await sbLoad();
-      sbStartAutoRefresh();
-    } else {
+    if(OFFLINE_MODE || !SB_READY){
       itemsCache     = readLS(ITEMS_KEY, []);
       customersCache = readLS(CUSTOMERS_KEY, []);
       historyCache   = readLS(HISTORY_KEY, []);
+    } else {
+      await sbLoad();
+      if(!autoRefreshStarted){ sbStartAutoRefresh(); autoRefreshStarted = true; }
     }
     renumberInvoices();
     if(!restoreDraft()){
@@ -1939,6 +2014,7 @@
     syncPageHeaders();
     renumberAll();
     recalcAll();
+    updateOfflineBar();
   }
   async function doLogin(){
     const email = document.getElementById('loginEmail').value.trim();
@@ -1952,7 +2028,11 @@
     try{
       const { error } = await sb.auth.signInWithPassword({ email:email, password:pass });
       if(error) throw error;
-      await startApp();
+      const wasOffline = OFFLINE_MODE;
+      OFFLINE_MODE = false;
+      localStorage.removeItem(OFFLINE_LS);
+      if(wasOffline) await syncPending();
+      await startApp(true);
     }catch(e){
       console.error(e);
       const msg = String((e && (e.message || e.error_description)) || e || '');
@@ -1971,6 +2051,10 @@
     const t = setTimeout(() => ctl.abort(), 8000);
     try{
       await fetch(p.url + '/auth/v1/health', { mode:'no-cors', cache:'no-store', signal:ctl.signal });
+      if(OFFLINE_MODE){
+        const t = document.getElementById('offlineText');
+        if(t) t.textContent = 'الخادم متاح الآن — سجّل الدخول للمزامنة';
+      }
     }catch(e){
       if(!err.textContent) err.textContent = 'تعذّر الاتصال بالخادم — تحقّق من اتصال الإنترنت';
     }finally{
@@ -1978,11 +2062,20 @@
     }
   }
   async function doLogout(){
-    try{ if(SB_READY) await sb.auth.signOut(); }catch(e){}
+    try{ if(SB_READY && !OFFLINE_MODE) await sb.auth.signOut(); }catch(e){}
+    OFFLINE_MODE = false;
+    localStorage.removeItem(OFFLINE_LS);
     location.reload();
   }
   (async function(){
     fillProjSel();
+    if(OFFLINE_MODE){
+      startApp(true);
+      updateOfflineBar();
+      checkServerReachable();
+      setInterval(checkServerReachable, 30000);
+      return;
+    }
     if(!SB_READY){ startApp(); return; }
     try{
       const { data } = await sb.auth.getSession();
